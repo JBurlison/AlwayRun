@@ -1,0 +1,140 @@
+<Window x:Class="AlwaysRun.Views.AddEditDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="clr-namespace:AlwaysRun.ViewModels"
+        mc:Ignorable="d"
+        Title="{Binding WindowTitle}" 
+        Height="420" Width="550"
+        MinHeight="420" MinWidth="450"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        d:DataContext="{d:DesignInstance Type=vm:AddEditAppViewModel}">
+    
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisConverter"/>
+        
+        <Style TargetType="Label">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,0,5,0"/>
+        </Style>
+        
+        <Style TargetType="TextBox">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Padding" Value="3"/>
+        </Style>
+        
+        <Style TargetType="Button">
+            <Setter Property="Padding" Value="15,5"/>
+            <Setter Property="MinWidth" Value="80"/>
+        </Style>
+    </Window.Resources>
+    
+    <Grid Margin="15">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="110"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
+        
+        <!-- Display Name -->
+        <Label Grid.Row="0" Content="Display Name:"/>
+        <TextBox Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2"
+                 Text="{Binding DisplayName, UpdateSourceTrigger=PropertyChanged}"
+                 MaxLength="100"
+                 Margin="0,5"/>
+        
+        <!-- File Path -->
+        <Label Grid.Row="1" Content="File Path:"/>
+        <TextBox Grid.Row="1" Grid.Column="1"
+                 Text="{Binding FilePath, UpdateSourceTrigger=PropertyChanged}"
+                 IsReadOnly="True"
+                 Margin="0,5"/>
+        <Button Grid.Row="1" Grid.Column="2"
+                Content="Browse..."
+                Command="{Binding BrowseCommand}"
+                Margin="5,5,0,5"/>
+        
+        <!-- Arguments -->
+        <Label Grid.Row="2" Content="Arguments:"/>
+        <TextBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2"
+                 Text="{Binding Arguments, UpdateSourceTrigger=PropertyChanged}"
+                 Margin="0,5"
+                 ToolTip="Optional command-line arguments"/>
+        
+        <!-- Working Directory -->
+        <Label Grid.Row="3" Content="Working Dir:"/>
+        <TextBox Grid.Row="3" Grid.Column="1"
+                 Text="{Binding WorkingDirectory, UpdateSourceTrigger=PropertyChanged}"
+                 Margin="0,5"
+                 ToolTip="Directory the application runs in"/>
+        <Button Grid.Row="3" Grid.Column="2"
+                Content="Browse..."
+                Command="{Binding BrowseWorkingDirectoryCommand}"
+                Margin="5,5,0,5"/>
+        
+        <!-- Restart Delay -->
+        <Label Grid.Row="4" Content="Restart Delay:"/>
+        <StackPanel Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2"
+                    Orientation="Horizontal"
+                    VerticalAlignment="Center"
+                    Margin="0,5">
+            <TextBox Width="60"
+                     Text="{Binding RestartDelaySeconds, UpdateSourceTrigger=PropertyChanged}"
+                     ToolTip="Initial delay in seconds before restarting the application after it exits"/>
+            <TextBlock Text="seconds (exponential backoff applies on repeated failures)"
+                       VerticalAlignment="Center"
+                       Margin="8,0,0,0"
+                       Foreground="Gray"/>
+        </StackPanel>
+        
+        <!-- PowerShell Bypass Option -->
+        <CheckBox Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="2"
+                  Content="Use -ExecutionPolicy Bypass for PowerShell scripts"
+                  IsChecked="{Binding UsePowerShellBypass}"
+                  Visibility="{Binding ShowPowerShellBypass, Converter={StaticResource BoolToVisConverter}}"
+                  Margin="0,10,0,5"
+                  ToolTip="Allows running PowerShell scripts that may be blocked by execution policy"/>
+        
+        <!-- Validation Error -->
+        <Border Grid.Row="6" Grid.ColumnSpan="3"
+                Background="#FFEEEE"
+                BorderBrush="#FFCCCC"
+                BorderThickness="1"
+                CornerRadius="3"
+                Padding="10,5"
+                Margin="0,10,0,0"
+                Visibility="{Binding HasValidationError, Converter={StaticResource BoolToVisConverter}}">
+            <TextBlock Text="{Binding ValidationError}"
+                       Foreground="#CC0000"
+                       TextWrapping="Wrap"/>
+        </Border>
+        
+        <!-- Buttons -->
+        <StackPanel Grid.Row="8" Grid.ColumnSpan="3"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Margin="0,15,0,0">
+            <Button Content="Save"
+                    Command="{Binding SaveCommand}"
+                    IsDefault="True"
+                    Margin="0,0,10,0"/>
+            <Button Content="Cancel"
+                    Command="{Binding CancelCommand}"
+                    IsCancel="True"/>
+        </StackPanel>
+    </Grid>
+</Window>
