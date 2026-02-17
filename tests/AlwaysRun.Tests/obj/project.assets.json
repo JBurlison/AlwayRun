@@ -1496,11 +1496,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Source\\Repos\\JBurlison\\AlwayRun\\tests\\AlwaysRun.Tests\\AlwaysRun.Tests.csproj",
+      "projectUniqueName": "C:\\source\\JBurlison\\AlwayRun\\tests\\AlwaysRun.Tests\\AlwaysRun.Tests.csproj",
       "projectName": "AlwaysRun.Tests",
-      "projectPath": "C:\\Source\\Repos\\JBurlison\\AlwayRun\\tests\\AlwaysRun.Tests\\AlwaysRun.Tests.csproj",
+      "projectPath": "C:\\source\\JBurlison\\AlwayRun\\tests\\AlwaysRun.Tests\\AlwaysRun.Tests.csproj",
       "packagesPath": "C:\\Users\\JBurl\\.nuget\\packages\\",
-      "outputPath": "C:\\Source\\Repos\\JBurlison\\AlwayRun\\tests\\AlwaysRun.Tests\\obj\\",
+      "outputPath": "C:\\source\\JBurlison\\AlwayRun\\tests\\AlwaysRun.Tests\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -1521,8 +1521,8 @@
         "net10.0-windows7.0": {
           "targetAlias": "net10.0-windows",
           "projectReferences": {
-            "C:\\Source\\Repos\\JBurlison\\AlwayRun\\src\\AlwaysRun\\AlwaysRun.csproj": {
-              "projectPath": "C:\\Source\\Repos\\JBurlison\\AlwayRun\\src\\AlwaysRun\\AlwaysRun.csproj"
+            "C:\\source\\JBurlison\\AlwayRun\\src\\AlwaysRun\\AlwaysRun.csproj": {
+              "projectPath": "C:\\source\\JBurlison\\AlwayRun\\src\\AlwaysRun\\AlwaysRun.csproj"
             }
           }
         }
@@ -1585,7 +1585,7 @@
             "privateAssets": "none"
           }
         },
-        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.102/PortableRuntimeIdentifierGraph.json",
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.100/PortableRuntimeIdentifierGraph.json",
         "packagesToPrune": {
           "Microsoft.CSharp": "(,4.7.32767]",
           "Microsoft.VisualBasic": "(,10.4.32767]",
