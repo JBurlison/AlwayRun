@@ -20,8 +20,8 @@ x64/
 x86/
 build/
 bld/
-[Bb]in/
-[Oo]bj/
+src/AlwayRun/bin/
+src/AlwayRun/obj/
 [Ll]ib/Dependency Builds/
 
 # Visual Studo 2015 cache/options directory
