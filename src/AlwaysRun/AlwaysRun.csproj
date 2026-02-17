@@ -9,6 +9,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>AlwaysRun</AssemblyName>
     <RootNamespace>AlwaysRun</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
   <ItemGroup>

@@ -186,15 +186,19 @@ public sealed partial class MainViewModel : ViewModelBase
         {
             var config = vm.ResultConfig;
 
-            // Update the view model
+            // Update the view model with editable properties
             SelectedApp.DisplayName = config.DisplayName;
             SelectedApp.FilePath = config.FilePath;
             SelectedApp.Arguments = config.Arguments;
             SelectedApp.WorkingDirectory = config.WorkingDirectory;
             SelectedApp.AppType = config.AppType;
             SelectedApp.UsePowerShellBypass = config.UsePowerShellBypass;
+            SelectedApp.RestartDelaySeconds = config.RestartDelaySeconds;
 
-            await _processMonitor.UpdateAppAsync(config);
+            // Use ToConfig() to preserve runtime state (IsPaused, timestamps) that
+            // the dialog's ResultConfig does not carry.
+            var updatedConfig = SelectedApp.ToConfig();
+            await _processMonitor.UpdateAppAsync(updatedConfig);
             await SaveConfigAsync();
 
             StatusMessage = $"Updated: {config.DisplayName}";

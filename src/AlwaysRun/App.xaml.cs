@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using System.IO;
+using System.Security.Principal;
 using AlwaysRun.Infrastructure;
 using AlwaysRun.Services;
 using AlwaysRun.ViewModels;
@@ -28,6 +30,14 @@ public partial class App : WpfApplication
     protected override void OnStartup(WpfStartupEventArgs e)
     {
         base.OnStartup(e);
+
+        // Ensure running as administrator — re-launch elevated if not
+        if (!IsRunningAsAdministrator())
+        {
+            RelaunchAsAdministrator();
+            Shutdown();
+            return;
+        }
 
         // Ensure directories exist
         AppPaths.EnsureDirectoriesExist();
@@ -192,5 +202,37 @@ public partial class App : WpfApplication
                 await mainVm.ResumeAllCommand.ExecuteAsync(null);
             }
         });
+    }
+
+    private static bool IsRunningAsAdministrator()
+    {
+        using var identity = WindowsIdentity.GetCurrent();
+        var principal = new WindowsPrincipal(identity);
+        return principal.IsInRole(WindowsBuiltInRole.Administrator);
+    }
+
+    private static void RelaunchAsAdministrator()
+    {
+        var exePath = Environment.ProcessPath;
+        if (string.IsNullOrEmpty(exePath))
+        {
+            return;
+        }
+
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = exePath,
+            UseShellExecute = true,
+            Verb = "runas"
+        };
+
+        try
+        {
+            Process.Start(startInfo);
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            // User declined the UAC prompt — nothing to do
+        }
     }
 }
