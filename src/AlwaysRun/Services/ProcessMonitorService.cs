@@ -241,7 +241,7 @@ public sealed class ProcessMonitorService(
             RaiseStatusChanged(state);
 
             // Schedule restart with backoff
-            ScheduleRestart(state, ct);
+            ScheduleRestart(state);
             return Task.CompletedTask;
         }
 
@@ -251,16 +251,18 @@ public sealed class ProcessMonitorService(
         state.LastError = null;
         RaiseStatusChanged(state);
 
-        // Attach exit handler
+        // Attach exit handler — do not forward the caller's CancellationToken
+        // into the exit handler. Restart lifecycle is managed independently via
+        // state.RestartCts, which is cancelled on Stop/Pause/Dispose.
         if (state.Process is not null)
         {
-            state.Process.Exited += (_, _) => OnProcessExited(state, ct);
+            state.Process.Exited += (_, _) => OnProcessExited(state);
         }
 
         return Task.CompletedTask;
     }
 
-    private void OnProcessExited(MonitoredAppState state, CancellationToken ct)
+    private void OnProcessExited(MonitoredAppState state)
     {
         try
         {
@@ -296,7 +298,7 @@ public sealed class ProcessMonitorService(
             RaiseStatusChanged(state);
 
             // Schedule restart
-            ScheduleRestart(state, ct);
+            ScheduleRestart(state);
         }
         catch (Exception ex)
         {
@@ -305,7 +307,7 @@ public sealed class ProcessMonitorService(
         }
     }
 
-    private void ScheduleRestart(MonitoredAppState state, CancellationToken ct)
+    private void ScheduleRestart(MonitoredAppState state)
     {
         // Don't restart if paused
         if (state.Config.IsPaused || state.Status == AppStatus.Paused)
@@ -316,7 +318,7 @@ public sealed class ProcessMonitorService(
         // Cancel any existing restart task
         state.RestartCts?.Cancel();
         state.RestartCts?.Dispose();
-        state.RestartCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        state.RestartCts = new CancellationTokenSource();
 
         // Use app's configured restart delay as the base
         var customInitialDelay = TimeSpan.FromSeconds(state.Config.RestartDelaySeconds);
