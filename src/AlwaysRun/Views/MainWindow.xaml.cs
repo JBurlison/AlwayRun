@@ -19,6 +19,7 @@ public partial class MainWindow : Window
         DataContext = _viewModel;
 
         _viewModel.ShowAddEditDialogRequested += OnShowAddEditDialogRequested;
+        _viewModel.ShowHistoryDialogRequested += OnShowHistoryDialogRequested;
 
         Loaded += OnLoaded;
     }
@@ -31,6 +32,15 @@ public partial class MainWindow : Window
     private void OnShowAddEditDialogRequested(object? sender, AddEditAppViewModel vm)
     {
         var dialog = new AddEditDialog(vm)
+        {
+            Owner = this
+        };
+        dialog.ShowDialog();
+    }
+
+    private void OnShowHistoryDialogRequested(object? sender, HistoryViewModel vm)
+    {
+        var dialog = new HistoryDialog(vm)
         {
             Owner = this
         };

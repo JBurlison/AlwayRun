@@ -21,6 +21,7 @@ public sealed partial class MainViewModel : ViewModelBase
     private readonly IProcessMonitorService _processMonitor;
     private readonly IAutoStartService _autoStartService;
     private readonly IShellService _shellService;
+    private readonly IRecoveryLogService _recoveryLogService;
     private readonly ILogger<MainViewModel> _logger;
     private readonly Func<AddEditAppViewModel> _addEditVmFactory;
 
@@ -49,6 +50,7 @@ public sealed partial class MainViewModel : ViewModelBase
         IProcessMonitorService processMonitor,
         IAutoStartService autoStartService,
         IShellService shellService,
+        IRecoveryLogService recoveryLogService,
         ILogger<MainViewModel> logger,
         Func<AddEditAppViewModel> addEditVmFactory)
     {
@@ -56,6 +58,7 @@ public sealed partial class MainViewModel : ViewModelBase
         _processMonitor = processMonitor;
         _autoStartService = autoStartService;
         _shellService = shellService;
+        _recoveryLogService = recoveryLogService;
         _logger = logger;
         _addEditVmFactory = addEditVmFactory;
 
@@ -66,6 +69,11 @@ public sealed partial class MainViewModel : ViewModelBase
     /// Event raised when an add/edit dialog should be shown.
     /// </summary>
     public event EventHandler<AddEditAppViewModel>? ShowAddEditDialogRequested;
+
+    /// <summary>
+    /// Event raised when the history dialog should be shown.
+    /// </summary>
+    public event EventHandler<HistoryViewModel>? ShowHistoryDialogRequested;
 
     /// <summary>
     /// Initializes the view model and loads configuration.
@@ -303,6 +311,17 @@ public sealed partial class MainViewModel : ViewModelBase
         }
     }
 
+    [RelayCommand(CanExecute = nameof(HasSelectedApp))]
+    private void ShowHistory()
+    {
+        if (SelectedApp is null) return;
+
+        _logger.LogDebug("ShowHistory command invoked for {DisplayName}", SelectedApp.DisplayName);
+
+        var vm = new HistoryViewModel(_recoveryLogService, SelectedApp.Id, SelectedApp.DisplayName);
+        ShowHistoryDialogRequested?.Invoke(this, vm);
+    }
+
     [RelayCommand]
     private async Task StartAllAsync()
     {
@@ -380,6 +399,7 @@ public sealed partial class MainViewModel : ViewModelBase
         EditCommand.NotifyCanExecuteChanged();
         RemoveCommand.NotifyCanExecuteChanged();
         OpenLocationCommand.NotifyCanExecuteChanged();
+        ShowHistoryCommand.NotifyCanExecuteChanged();
         NotifyAppCommandsCanExecuteChanged();
     }
 

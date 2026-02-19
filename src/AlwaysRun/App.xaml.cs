@@ -136,6 +136,7 @@ public partial class App : WpfApplication
         services.AddSingleton<IConfigService, ConfigService>();
         services.AddSingleton<IAutoStartService, AutoStartService>();
         services.AddSingleton<IProcessLauncher, ProcessLauncher>();
+        services.AddSingleton<IRecoveryLogService, RecoveryLogService>();
         services.AddSingleton<IProcessMonitorService, ProcessMonitorService>();
         services.AddSingleton<IValidationService, ValidationService>();
         services.AddSingleton<IShellService, ShellService>();

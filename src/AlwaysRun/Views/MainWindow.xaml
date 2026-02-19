@@ -57,6 +57,8 @@
                 <Separator/>
                 <Button Content="Open Location" Command="{Binding OpenLocationCommand}" Style="{StaticResource ToolbarButtonStyle}"
                         ToolTip="Open the file location in Explorer"/>
+                <Button Content="History" Command="{Binding ShowHistoryCommand}" Style="{StaticResource ToolbarButtonStyle}"
+                        ToolTip="View recovery history for the selected application"/>
             </ToolBar>
         </ToolBarTray>
         
@@ -106,6 +108,7 @@
                     <MenuItem Header="Remove" Command="{Binding RemoveCommand}"/>
                     <Separator/>
                     <MenuItem Header="Open Location" Command="{Binding OpenLocationCommand}"/>
+                    <MenuItem Header="View History" Command="{Binding ShowHistoryCommand}"/>
                 </ContextMenu>
             </DataGrid.ContextMenu>
         </DataGrid>

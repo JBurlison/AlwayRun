@@ -49,6 +49,7 @@ internal sealed class MonitoredAppState : IDisposable
 /// </summary>
 public sealed class ProcessMonitorService(
     IProcessLauncher processLauncher,
+    IRecoveryLogService recoveryLog,
     BackoffPolicy backoffPolicy,
     ILogger<ProcessMonitorService> logger) : IProcessMonitorService, IDisposable
 {
@@ -183,6 +184,12 @@ public sealed class ProcessMonitorService(
 
         state.Status = AppStatus.Paused;
         RaiseStatusChanged(state);
+
+        _ = recoveryLog.LogEventAsync(appId, new RecoveryEvent
+        {
+            Timestamp = DateTimeOffset.UtcNow,
+            EventType = RecoveryEventType.Paused
+        });
     }
 
     /// <inheritdoc/>
@@ -203,6 +210,13 @@ public sealed class ProcessMonitorService(
 
         logger.LogInformation("Resuming monitoring for {DisplayName} ({AppId})", state.Config.DisplayName, appId);
         state.AttemptCount = 0; // Reset backoff on manual resume
+
+        _ = recoveryLog.LogEventAsync(appId, new RecoveryEvent
+        {
+            Timestamp = DateTimeOffset.UtcNow,
+            EventType = RecoveryEventType.Resumed
+        });
+
         return StartInternalAsync(state, ct);
     }
 
@@ -240,6 +254,15 @@ public sealed class ProcessMonitorService(
             state.LastError = result.Error;
             RaiseStatusChanged(state);
 
+            // Log failed restart attempt
+            _ = recoveryLog.LogEventAsync(state.Config.Id, new RecoveryEvent
+            {
+                Timestamp = DateTimeOffset.UtcNow,
+                EventType = RecoveryEventType.RestartFailed,
+                AttemptNumber = state.AttemptCount,
+                Error = result.Error
+            });
+
             // Schedule restart with backoff
             ScheduleRestart(state);
             return Task.CompletedTask;
@@ -250,6 +273,15 @@ public sealed class ProcessMonitorService(
         state.LastStartTime = DateTimeOffset.UtcNow;
         state.LastError = null;
         RaiseStatusChanged(state);
+
+        // Log recovery event — differentiate initial start from restart
+        var eventType = state.AttemptCount > 0 ? RecoveryEventType.Restarted : RecoveryEventType.Started;
+        _ = recoveryLog.LogEventAsync(state.Config.Id, new RecoveryEvent
+        {
+            Timestamp = DateTimeOffset.UtcNow,
+            EventType = eventType,
+            AttemptNumber = state.AttemptCount
+        });
 
         // Attach exit handler — do not forward the caller's CancellationToken
         // into the exit handler. Restart lifecycle is managed independently via
@@ -296,6 +328,20 @@ public sealed class ProcessMonitorService(
 
             state.Status = AppStatus.Stopped;
             RaiseStatusChanged(state);
+
+            // Log crash event
+            var uptime = state.LastStartTime.HasValue
+                ? exitTime - state.LastStartTime.Value
+                : (TimeSpan?)null;
+
+            _ = recoveryLog.LogEventAsync(state.Config.Id, new RecoveryEvent
+            {
+                Timestamp = exitTime,
+                EventType = RecoveryEventType.Crashed,
+                ExitCode = exitCode,
+                Uptime = uptime,
+                AttemptNumber = state.AttemptCount
+            });
 
             // Schedule restart
             ScheduleRestart(state);
@@ -379,6 +425,12 @@ public sealed class ProcessMonitorService(
             state.Process.Dispose();
             state.Process = null;
             state.LastExitTime = DateTimeOffset.UtcNow;
+
+            _ = recoveryLog.LogEventAsync(state.Config.Id, new RecoveryEvent
+            {
+                Timestamp = DateTimeOffset.UtcNow,
+                EventType = RecoveryEventType.Stopped
+            });
 
             if (state.Status != AppStatus.Paused)
             {
