@@ -9,5 +9,8 @@ public enum ScheduledRestartMethod
     ForceKill,
 
     /// <summary>Runs a user-supplied command, waits for exit, then kills as a fallback.</summary>
-    GracefulCommand
+    GracefulCommand,
+
+    /// <summary>Sends Ctrl+C to the process console, followed by Y and Enter.</summary>
+    CtrlCThenY
 }

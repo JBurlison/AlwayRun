@@ -10,7 +10,7 @@ A Windows desktop application that monitors and automatically restarts your appl
 - **Configurable restart delay** - Set custom initial delay per application before restart (with exponential backoff on repeated failures)
 - **Pause/Resume** - Pause monitoring on individual applications (e.g., for updates) and resume when ready
 - **Global restart pause** - Suspend all automatic restarts without stopping processes that are already running
-- **Scheduled restarts** - Restart an item at a recurring interval by force-killing it or running a graceful shutdown command first
+- **Scheduled restarts** - Restart an item at a recurring interval by force-killing it, running a graceful command, or sending Ctrl+C followed by Y and Enter
 - **System tray** - Minimizes to system tray; double-click to restore
 - **Per-app settings** - Arguments, working directory, PowerShell execution policy bypass
 
@@ -43,7 +43,7 @@ dotnet publish src/AlwaysRun/AlwaysRun.csproj -c Release -r win-x64 --self-conta
 2. Browse to select an executable, PowerShell script, or batch file
 3. Set a display name and optional arguments
 4. Configure the restart delay (default: 2 seconds)
-5. Optionally enable scheduled restart, choose an interval (24 hours for daily), and choose `ForceKill` or `GracefulCommand`
+5. Optionally enable scheduled restart, choose an interval (24 hours for daily), and choose `ForceKill`, `GracefulCommand`, or `CtrlCThenY`
 6. For `GracefulCommand`, enter the command that asks the application to exit; a 30-second force-kill fallback applies
 7. For PowerShell scripts, optionally enable "Bypass execution policy"
 8. Click **Save**

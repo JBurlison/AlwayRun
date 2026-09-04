@@ -588,6 +588,22 @@ public sealed class ProcessMonitorService(
 
         try
         {
+            if (state.Config.ScheduledRestartMethod == ScheduledRestartMethod.CtrlCThenY)
+            {
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                timeout.CancelAfter(TimeSpan.FromSeconds(30));
+                try
+                {
+                    await ConsoleControlService.SendCtrlCThenYAsync(process, logger, timeout.Token);
+                    await process.WaitForExitAsync(timeout.Token);
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    logger.LogWarning("Ctrl+C/Y shutdown timed out for {DisplayName}; force-killing it",
+                        state.Config.DisplayName);
+                }
+            }
+
             if (state.Config.ScheduledRestartMethod == ScheduledRestartMethod.GracefulCommand &&
                 !string.IsNullOrWhiteSpace(state.Config.GracefulShutdownCommand))
             {

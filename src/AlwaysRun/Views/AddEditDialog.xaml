@@ -133,7 +133,7 @@
                  Text="{Binding GracefulShutdownCommand, UpdateSourceTrigger=PropertyChanged}"
                  IsEnabled="{Binding ScheduledRestartEnabled}"
                  Margin="0,5"
-                 ToolTip="For GracefulCommand, this is run via cmd.exe. AlwaysRun waits up to 30 seconds, then force-kills if needed."/>
+                 ToolTip="Used only by GracefulCommand. CtrlCThenY sends Ctrl+C, waits briefly, then sends Y and Enter. A 30-second force-kill fallback applies."/>
         
         <!-- PowerShell Bypass Option -->
         <CheckBox Grid.Row="9" Grid.Column="1" Grid.ColumnSpan="2"
