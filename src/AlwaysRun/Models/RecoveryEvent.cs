@@ -65,5 +65,8 @@ public enum RecoveryEventType
     Paused,
 
     /// <summary>Process monitoring was resumed by the user.</summary>
-    Resumed
+    Resumed,
+
+    /// <summary>A configured periodic restart was initiated.</summary>
+    ScheduledRestart
 }

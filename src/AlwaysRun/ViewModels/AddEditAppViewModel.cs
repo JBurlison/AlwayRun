@@ -44,6 +44,21 @@ public sealed partial class AddEditAppViewModel : ViewModelBase
     private int _restartDelaySeconds = 2;
 
     [ObservableProperty]
+    private bool _scheduledRestartEnabled;
+
+    [ObservableProperty]
+    private int _scheduledRestartIntervalHours = 24;
+
+    [ObservableProperty]
+    private ScheduledRestartMethod _scheduledRestartMethod;
+
+    [ObservableProperty]
+    private string? _gracefulShutdownCommand;
+
+    public IReadOnlyList<ScheduledRestartMethod> ScheduledRestartMethods { get; } =
+        Enum.GetValues<ScheduledRestartMethod>();
+
+    [ObservableProperty]
     private bool _showPowerShellBypass;
 
     [ObservableProperty]
@@ -92,6 +107,14 @@ public sealed partial class AddEditAppViewModel : ViewModelBase
         ValidateForm();
     }
 
+    partial void OnScheduledRestartEnabledChanged(bool value) => ValidateForm();
+
+    partial void OnScheduledRestartIntervalHoursChanged(int value) => ValidateForm();
+
+    partial void OnScheduledRestartMethodChanged(ScheduledRestartMethod value) => ValidateForm();
+
+    partial void OnGracefulShutdownCommandChanged(string? value) => ValidateForm();
+
     /// <summary>
     /// Loads configuration for editing.
     /// </summary>
@@ -104,6 +127,10 @@ public sealed partial class AddEditAppViewModel : ViewModelBase
         WorkingDirectory = config.WorkingDirectory;
         UsePowerShellBypass = config.UsePowerShellBypass;
         RestartDelaySeconds = config.RestartDelaySeconds;
+        ScheduledRestartEnabled = config.ScheduledRestartEnabled;
+        ScheduledRestartIntervalHours = config.ScheduledRestartIntervalHours;
+        ScheduledRestartMethod = config.ScheduledRestartMethod;
+        GracefulShutdownCommand = config.GracefulShutdownCommand;
         UpdateAppType();
     }
 
@@ -197,6 +224,12 @@ public sealed partial class AddEditAppViewModel : ViewModelBase
             IsPaused = false,
             UsePowerShellBypass = appType == AppType.PowerShell && UsePowerShellBypass,
             RestartDelaySeconds = Math.Max(1, RestartDelaySeconds),
+            ScheduledRestartEnabled = ScheduledRestartEnabled,
+            ScheduledRestartIntervalHours = Math.Clamp(ScheduledRestartIntervalHours, 1, 720),
+            ScheduledRestartMethod = ScheduledRestartMethod,
+            GracefulShutdownCommand = string.IsNullOrWhiteSpace(GracefulShutdownCommand)
+                ? null
+                : GracefulShutdownCommand.Trim(),
             LastStartTime = null,
             LastExitTime = null,
             LastExitCode = null
@@ -244,6 +277,32 @@ public sealed partial class AddEditAppViewModel : ViewModelBase
         if (!fileResult.IsSuccess)
         {
             ValidationError = fileResult.Error;
+            HasValidationError = true;
+            SaveCommand.NotifyCanExecuteChanged();
+            return false;
+        }
+
+        if (ScheduledRestartEnabled && ScheduledRestartIntervalHours < 1)
+        {
+            ValidationError = "The scheduled restart interval must be at least 1 hour.";
+            HasValidationError = true;
+            SaveCommand.NotifyCanExecuteChanged();
+            return false;
+        }
+
+        if (ScheduledRestartEnabled && ScheduledRestartIntervalHours > 720)
+        {
+            ValidationError = "The scheduled restart interval cannot exceed 720 hours (30 days).";
+            HasValidationError = true;
+            SaveCommand.NotifyCanExecuteChanged();
+            return false;
+        }
+
+        if (ScheduledRestartEnabled &&
+            ScheduledRestartMethod == ScheduledRestartMethod.GracefulCommand &&
+            string.IsNullOrWhiteSpace(GracefulShutdownCommand))
+        {
+            ValidationError = "Enter a graceful shutdown command, or choose ForceKill.";
             HasValidationError = true;
             SaveCommand.NotifyCanExecuteChanged();
             return false;

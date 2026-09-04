@@ -38,6 +38,12 @@ public interface IProcessMonitorService
     Task StopAllAsync(CancellationToken ct = default);
 
     /// <summary>
+    /// Globally pauses or resumes automatic crash and scheduled restarts without
+    /// stopping applications that are currently running.
+    /// </summary>
+    Task SetAutoRestartPausedAsync(bool paused, CancellationToken ct = default);
+
+    /// <summary>
     /// Starts a specific application.
     /// </summary>
     Task StartAsync(Guid appId, CancellationToken ct = default);

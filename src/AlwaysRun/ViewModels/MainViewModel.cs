@@ -40,6 +40,9 @@ public sealed partial class MainViewModel : ViewModelBase
     private bool _exitOnClose;
 
     [ObservableProperty]
+    private bool _autoRestartPaused;
+
+    [ObservableProperty]
     private bool _isLoading;
 
     [ObservableProperty]
@@ -100,12 +103,21 @@ public sealed partial class MainViewModel : ViewModelBase
             // Set auto-start state
             AutoStartEnabled = await _autoStartService.IsEnabledAsync(ct);
             ExitOnClose = _currentConfig.ExitOnClose;
+            AutoRestartPaused = _currentConfig.AutoRestartPaused;
 
             // Initialize process monitor
             await _processMonitor.InitializeAsync(_currentConfig.Apps, ct);
 
-            // Start all non-paused apps
-            await _processMonitor.StartAllAsync(ct);
+            if (AutoRestartPaused)
+            {
+                await _processMonitor.SetAutoRestartPausedAsync(true, ct);
+            }
+
+            // Start all non-paused apps unless automatic restarts are globally paused.
+            if (!AutoRestartPaused)
+            {
+                await _processMonitor.StartAllAsync(ct);
+            }
 
             StatusMessage = $"Loaded {Apps.Count} application(s)";
             _logger.LogInformation("MainViewModel initialized with {AppCount} apps", Apps.Count);
@@ -129,6 +141,23 @@ public sealed partial class MainViewModel : ViewModelBase
     partial void OnExitOnCloseChanged(bool value)
     {
         _ = SaveConfigAsync();
+    }
+
+    partial void OnAutoRestartPausedChanged(bool value)
+    {
+        if (!IsLoading)
+        {
+            _ = SetAutoRestartPausedAsync(value);
+        }
+    }
+
+    private async Task SetAutoRestartPausedAsync(bool paused)
+    {
+        await _processMonitor.SetAutoRestartPausedAsync(paused);
+        await SaveConfigAsync();
+        StatusMessage = paused
+            ? "Automatic restarts paused; running applications were left alone"
+            : "Automatic restarts resumed";
     }
 
     private async Task SetAutoStartAsync(bool enabled)
@@ -202,6 +231,10 @@ public sealed partial class MainViewModel : ViewModelBase
             SelectedApp.AppType = config.AppType;
             SelectedApp.UsePowerShellBypass = config.UsePowerShellBypass;
             SelectedApp.RestartDelaySeconds = config.RestartDelaySeconds;
+            SelectedApp.ScheduledRestartEnabled = config.ScheduledRestartEnabled;
+            SelectedApp.ScheduledRestartIntervalHours = config.ScheduledRestartIntervalHours;
+            SelectedApp.ScheduledRestartMethod = config.ScheduledRestartMethod;
+            SelectedApp.GracefulShutdownCommand = config.GracefulShutdownCommand;
 
             // Use ToConfig() to preserve runtime state (IsPaused, timestamps) that
             // the dialog's ResultConfig does not carry.
@@ -435,7 +468,8 @@ public sealed partial class MainViewModel : ViewModelBase
             var config = _currentConfig with
             {
                 Apps = apps,
-                ExitOnClose = ExitOnClose
+                ExitOnClose = ExitOnClose,
+                AutoRestartPaused = AutoRestartPaused
             };
 
             await _configService.SaveAsync(config);

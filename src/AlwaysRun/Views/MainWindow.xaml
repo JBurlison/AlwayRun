@@ -91,6 +91,7 @@
                 
                 <DataGridTextColumn Header="Name" Binding="{Binding DisplayName}" Width="150"/>
                 <DataGridTextColumn Header="File Path" Binding="{Binding FilePath}" Width="*"/>
+                <DataGridTextColumn Header="Scheduled Restart" Binding="{Binding ScheduledRestartDisplay}" Width="110"/>
                 <DataGridTextColumn Header="Last Start" Binding="{Binding LastStartTimeDisplay}" Width="120"/>
                 <DataGridTextColumn Header="Last Exit" Binding="{Binding LastExitTimeDisplay}" Width="120"/>
                 <DataGridTextColumn Header="Exit Code" Binding="{Binding LastExitCodeDisplay}" Width="70"/>
@@ -124,7 +125,12 @@
                 <CheckBox Content="Exit on close (instead of minimize to tray)" 
                           IsChecked="{Binding ExitOnClose}" 
                           VerticalAlignment="Center"
+                          Margin="0,0,20,0"
                           ToolTip="When unchecked, closing the window minimizes to system tray"/>
+                <CheckBox Content="Pause automatic restarts"
+                          IsChecked="{Binding AutoRestartPaused}"
+                          VerticalAlignment="Center"
+                          ToolTip="Leave running applications alone, but do not restart exited applications until unchecked"/>
             </StackPanel>
         </GroupBox>
         

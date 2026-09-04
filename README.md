@@ -9,6 +9,8 @@ A Windows desktop application that monitors and automatically restarts your appl
 - **Multiple file types** - Supports executables (`.exe`), PowerShell scripts (`.ps1`), and batch files (`.bat`, `.cmd`)
 - **Configurable restart delay** - Set custom initial delay per application before restart (with exponential backoff on repeated failures)
 - **Pause/Resume** - Pause monitoring on individual applications (e.g., for updates) and resume when ready
+- **Global restart pause** - Suspend all automatic restarts without stopping processes that are already running
+- **Scheduled restarts** - Restart an item at a recurring interval by force-killing it or running a graceful shutdown command first
 - **System tray** - Minimizes to system tray; double-click to restore
 - **Per-app settings** - Arguments, working directory, PowerShell execution policy bypass
 
@@ -41,8 +43,10 @@ dotnet publish src/AlwaysRun/AlwaysRun.csproj -c Release -r win-x64 --self-conta
 2. Browse to select an executable, PowerShell script, or batch file
 3. Set a display name and optional arguments
 4. Configure the restart delay (default: 2 seconds)
-5. For PowerShell scripts, optionally enable "Bypass execution policy"
-6. Click **Save**
+5. Optionally enable scheduled restart, choose an interval (24 hours for daily), and choose `ForceKill` or `GracefulCommand`
+6. For `GracefulCommand`, enter the command that asks the application to exit; a 30-second force-kill fallback applies
+7. For PowerShell scripts, optionally enable "Bypass execution policy"
+8. Click **Save**
 
 ### Managing Applications
 
@@ -67,6 +71,7 @@ When a monitored application exits:
 
 - **Start with Windows** - Toggle auto-start on login
 - **Exit on close** - When unchecked, closing the window minimizes to system tray
+- **Pause automatic restarts** - Leaves current processes running, suppresses crash and scheduled restarts, and starts missing non-paused items when unchecked
 
 ## Configuration
 

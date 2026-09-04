@@ -20,12 +20,19 @@ internal sealed class MonitoredAppState : IDisposable
     public string? LastError { get; set; }
     public CancellationTokenSource? RestartCts { get; set; }
     public Task? RestartTask { get; set; }
+    public CancellationTokenSource? ScheduledRestartCts { get; set; }
+    public Task? ScheduledRestartTask { get; set; }
+    public bool IsRemoved { get; set; }
 
     public void Dispose()
     {
         RestartCts?.Cancel();
         RestartCts?.Dispose();
         RestartCts = null;
+
+        ScheduledRestartCts?.Cancel();
+        ScheduledRestartCts?.Dispose();
+        ScheduledRestartCts = null;
 
         try
         {
@@ -56,6 +63,7 @@ public sealed class ProcessMonitorService(
     private readonly ConcurrentDictionary<Guid, MonitoredAppState> _apps = new();
     private readonly object _lock = new();
     private bool _disposed;
+    private volatile bool _autoRestartPaused;
 
     /// <inheritdoc/>
     public event EventHandler<AppStatusChangedEventArgs>? StatusChanged;
@@ -87,6 +95,10 @@ public sealed class ProcessMonitorService(
         if (_apps.TryGetValue(app.Id, out var state))
         {
             state.Config = app;
+            if (state.Status == AppStatus.Running)
+            {
+                SchedulePeriodicRestart(state);
+            }
             logger.LogInformation("Updated configuration for {DisplayName} ({AppId})", app.DisplayName, app.Id);
         }
         else
@@ -110,6 +122,7 @@ public sealed class ProcessMonitorService(
         {
             logger.LogInformation("Removing app from monitoring: {DisplayName} ({AppId})",
                 state.Config.DisplayName, appId);
+            state.IsRemoved = true;
             await StopInternalAsync(state);
             state.Dispose();
         }
@@ -139,6 +152,30 @@ public sealed class ProcessMonitorService(
             .ToList();
 
         await Task.WhenAll(tasks);
+    }
+
+    /// <inheritdoc/>
+    public async Task SetAutoRestartPausedAsync(bool paused, CancellationToken ct = default)
+    {
+        _autoRestartPaused = paused;
+        logger.LogInformation("Automatic restarts {State}", paused ? "paused" : "resumed");
+
+        if (paused)
+        {
+            foreach (var state in _apps.Values)
+            {
+                state.RestartCts?.Cancel();
+                state.ScheduledRestartCts?.Cancel();
+            }
+            return;
+        }
+
+        foreach (var state in _apps.Values.Where(s => s.Status == AppStatus.Running))
+        {
+            SchedulePeriodicRestart(state);
+        }
+
+        await StartAllAsync(ct);
     }
 
     /// <inheritdoc/>
@@ -175,9 +212,11 @@ public sealed class ProcessMonitorService(
         }
 
         logger.LogInformation("Pausing monitoring for {DisplayName} ({AppId})", state.Config.DisplayName, appId);
+        state.Config = state.Config with { IsPaused = true };
 
         // Cancel any pending restart
         state.RestartCts?.Cancel();
+        state.ScheduledRestartCts?.Cancel();
 
         // Stop the process if running
         await StopInternalAsync(state);
@@ -209,6 +248,7 @@ public sealed class ProcessMonitorService(
         }
 
         logger.LogInformation("Resuming monitoring for {DisplayName} ({AppId})", state.Config.DisplayName, appId);
+        state.Config = state.Config with { IsPaused = false };
         state.AttemptCount = 0; // Reset backoff on manual resume
 
         _ = recoveryLog.LogEventAsync(appId, new RecoveryEvent
@@ -288,17 +328,27 @@ public sealed class ProcessMonitorService(
         // state.RestartCts, which is cancelled on Stop/Pause/Dispose.
         if (state.Process is not null)
         {
-            state.Process.Exited += (_, _) => OnProcessExited(state);
+            var startedProcess = state.Process;
+            startedProcess.Exited += (_, _) => OnProcessExited(state, startedProcess);
         }
+
+        SchedulePeriodicRestart(state);
 
         return Task.CompletedTask;
     }
 
-    private void OnProcessExited(MonitoredAppState state)
+    private void OnProcessExited(MonitoredAppState state, Process exitedProcess)
     {
         try
         {
-            var exitCode = state.Process?.ExitCode ?? -1;
+            // Manual stop/removal clears state.Process before terminating it. A
+            // late Exited callback for that process must not schedule a restart.
+            if (!ReferenceEquals(state.Process, exitedProcess) || state.IsRemoved)
+            {
+                return;
+            }
+
+            var exitCode = exitedProcess.ExitCode;
             var exitTime = DateTimeOffset.UtcNow;
 
             logger.LogInformation(
@@ -307,8 +357,9 @@ public sealed class ProcessMonitorService(
 
             state.LastExitTime = exitTime;
             state.LastExitCode = exitCode;
-            state.Process?.Dispose();
+            exitedProcess.Dispose();
             state.Process = null;
+            state.ScheduledRestartCts?.Cancel();
 
             // Check if process ran long enough to reset backoff
             if (state.LastStartTime.HasValue && backoffPolicy.ShouldResetAttempts(state.LastStartTime.Value))
@@ -356,7 +407,7 @@ public sealed class ProcessMonitorService(
     private void ScheduleRestart(MonitoredAppState state)
     {
         // Don't restart if paused
-        if (state.Config.IsPaused || state.Status == AppStatus.Paused)
+        if (_autoRestartPaused || state.IsRemoved || state.Config.IsPaused || state.Status == AppStatus.Paused)
         {
             return;
         }
@@ -381,7 +432,7 @@ public sealed class ProcessMonitorService(
             {
                 await Task.Delay(delay, state.RestartCts.Token);
 
-                if (!state.RestartCts.Token.IsCancellationRequested)
+                if (!state.RestartCts.Token.IsCancellationRequested && !_autoRestartPaused && !state.IsRemoved)
                 {
                     await StartInternalAsync(state, state.RestartCts.Token);
                 }
@@ -405,8 +456,11 @@ public sealed class ProcessMonitorService(
         state.RestartCts?.Cancel();
         state.RestartCts?.Dispose();
         state.RestartCts = null;
+        state.ScheduledRestartCts?.Cancel();
+        state.ScheduledRestartCts?.Dispose();
+        state.ScheduledRestartCts = null;
 
-        if (state.Process is null || state.Process.HasExited)
+        if (state.Process is null)
         {
             if (state.Status != AppStatus.Paused)
             {
@@ -416,14 +470,31 @@ public sealed class ProcessMonitorService(
             return Task.CompletedTask;
         }
 
+        if (state.Process.HasExited)
+        {
+            var exitedProcess = state.Process;
+            state.Process = null;
+            exitedProcess.Dispose();
+            if (state.Status != AppStatus.Paused)
+            {
+                state.Status = AppStatus.Stopped;
+                RaiseStatusChanged(state);
+            }
+            return Task.CompletedTask;
+        }
+
+        // Mark this process as no longer tracked before terminating it. This makes
+        // the Exited callback a no-op instead of an automatic restart request.
+        var process = state.Process;
+        state.Process = null;
+
         try
         {
             logger.LogInformation("Stopping process for {DisplayName} ({AppId}) with PID {ProcessId}",
-                state.Config.DisplayName, state.Config.Id, state.Process.Id);
+                state.Config.DisplayName, state.Config.Id, process.Id);
 
-            state.Process.Kill(entireProcessTree: true);
-            state.Process.Dispose();
-            state.Process = null;
+            process.Kill(entireProcessTree: true);
+            process.Dispose();
             state.LastExitTime = DateTimeOffset.UtcNow;
 
             _ = recoveryLog.LogEventAsync(state.Config.Id, new RecoveryEvent
@@ -445,6 +516,155 @@ public sealed class ProcessMonitorService(
         }
 
         return Task.CompletedTask;
+    }
+
+    private void SchedulePeriodicRestart(MonitoredAppState state)
+    {
+        state.ScheduledRestartCts?.Cancel();
+        state.ScheduledRestartCts?.Dispose();
+        state.ScheduledRestartCts = null;
+
+        if (_autoRestartPaused || state.IsRemoved || state.Config.IsPaused ||
+            !state.Config.ScheduledRestartEnabled || state.Status != AppStatus.Running)
+        {
+            return;
+        }
+
+        var interval = TimeSpan.FromHours(Math.Clamp(state.Config.ScheduledRestartIntervalHours, 1, 720));
+        var cts = new CancellationTokenSource();
+        state.ScheduledRestartCts = cts;
+        logger.LogInformation("Scheduled periodic restart for {DisplayName} ({AppId}) in {Interval}",
+            state.Config.DisplayName, state.Config.Id, interval);
+
+        state.ScheduledRestartTask = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(interval, cts.Token);
+                if (!cts.IsCancellationRequested && !_autoRestartPaused && !state.IsRemoved)
+                {
+                    // Once a due restart begins, finish the stop/start transition as
+                    // one operation. The pause flag is checked again before restart.
+                    await PerformScheduledRestartAsync(state, CancellationToken.None);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                logger.LogDebug("Periodic restart cancelled for {DisplayName} ({AppId})",
+                    state.Config.DisplayName, state.Config.Id);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Periodic restart failed for {DisplayName} ({AppId})",
+                    state.Config.DisplayName, state.Config.Id);
+                ScheduleRestart(state);
+            }
+        }, cts.Token);
+    }
+
+    private async Task PerformScheduledRestartAsync(MonitoredAppState state, CancellationToken ct)
+    {
+        var process = state.Process;
+        if (process is null || process.HasExited || _autoRestartPaused ||
+            state.Config.IsPaused || state.IsRemoved)
+        {
+            return;
+        }
+
+        logger.LogInformation("Performing scheduled restart for {DisplayName} ({AppId}) using {Method}",
+            state.Config.DisplayName, state.Config.Id, state.Config.ScheduledRestartMethod);
+
+        _ = recoveryLog.LogEventAsync(state.Config.Id, new RecoveryEvent
+        {
+            Timestamp = DateTimeOffset.UtcNow,
+            EventType = RecoveryEventType.ScheduledRestart
+        });
+
+        // Make the old process stale before requesting exit. Its exit callback can
+        // no longer race the explicit restart below.
+        state.Process = null;
+        state.Status = AppStatus.Stopped;
+        RaiseStatusChanged(state);
+
+        try
+        {
+            if (state.Config.ScheduledRestartMethod == ScheduledRestartMethod.GracefulCommand &&
+                !string.IsNullOrWhiteSpace(state.Config.GracefulShutdownCommand))
+            {
+                Process? command = null;
+                try
+                {
+                    var commandStartInfo = new ProcessStartInfo
+                    {
+                        FileName = "cmd.exe",
+                        WorkingDirectory = state.Config.WorkingDirectory,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    };
+                    commandStartInfo.ArgumentList.Add("/d");
+                    commandStartInfo.ArgumentList.Add("/s");
+                    commandStartInfo.ArgumentList.Add("/c");
+                    commandStartInfo.ArgumentList.Add(state.Config.GracefulShutdownCommand);
+                    command = Process.Start(commandStartInfo);
+
+                    using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    timeout.CancelAfter(TimeSpan.FromSeconds(30));
+                    if (command is not null)
+                    {
+                        await command.WaitForExitAsync(timeout.Token);
+                    }
+                    await process.WaitForExitAsync(timeout.Token);
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    logger.LogWarning("Graceful shutdown timed out for {DisplayName}; force-killing it",
+                        state.Config.DisplayName);
+                    if (command is { HasExited: false })
+                    {
+                        command.Kill(entireProcessTree: true);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Graceful shutdown command failed for {DisplayName}; force-killing it",
+                        state.Config.DisplayName);
+                }
+                finally
+                {
+                    command?.Dispose();
+                }
+            }
+
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+                await process.WaitForExitAsync(ct);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Could not stop {DisplayName} for its scheduled restart",
+                state.Config.DisplayName);
+
+            if (!process.HasExited)
+            {
+                state.Process = process;
+                state.Status = AppStatus.Running;
+                RaiseStatusChanged(state);
+                SchedulePeriodicRestart(state);
+                return;
+            }
+        }
+
+        state.LastExitTime = DateTimeOffset.UtcNow;
+        state.LastExitCode = process.ExitCode;
+        process.Dispose();
+
+        if (!_autoRestartPaused && !state.IsRemoved && !state.Config.IsPaused)
+        {
+            state.AttemptCount = 0;
+            await StartInternalAsync(state, ct);
+        }
     }
 
     private void RaiseStatusChanged(MonitoredAppState state)

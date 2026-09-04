@@ -22,6 +22,20 @@ public record ManagedAppConfig
     /// Exponential backoff applies to subsequent attempts.
     /// </summary>
     public int RestartDelaySeconds { get; init; } = 2;
+
+    /// <summary>
+    /// Periodically restarts this application after the configured number of hours.
+    /// The interval is measured from the most recent successful start.
+    /// </summary>
+    public bool ScheduledRestartEnabled { get; init; }
+    public int ScheduledRestartIntervalHours { get; init; } = 24;
+    public ScheduledRestartMethod ScheduledRestartMethod { get; init; } = ScheduledRestartMethod.ForceKill;
+
+    /// <summary>
+    /// Command executed through cmd.exe for a graceful scheduled restart.
+    /// The application has 30 seconds to exit before it is force-killed.
+    /// </summary>
+    public string? GracefulShutdownCommand { get; init; }
     
     public DateTimeOffset? LastStartTime { get; init; }
     public DateTimeOffset? LastExitTime { get; init; }
@@ -48,6 +62,10 @@ public record ManagedAppConfig
             IsPaused = false,
             UsePowerShellBypass = usePowerShellBypass,
             RestartDelaySeconds = restartDelaySeconds,
+            ScheduledRestartEnabled = false,
+            ScheduledRestartIntervalHours = 24,
+            ScheduledRestartMethod = ScheduledRestartMethod.ForceKill,
+            GracefulShutdownCommand = null,
             LastStartTime = null,
             LastExitTime = null,
             LastExitCode = null

@@ -38,6 +38,18 @@ public sealed partial class ManagedAppViewModel : ViewModelBase
     private int _restartDelaySeconds = 2;
 
     [ObservableProperty]
+    private bool _scheduledRestartEnabled;
+
+    [ObservableProperty]
+    private int _scheduledRestartIntervalHours = 24;
+
+    [ObservableProperty]
+    private ScheduledRestartMethod _scheduledRestartMethod;
+
+    [ObservableProperty]
+    private string? _gracefulShutdownCommand;
+
+    [ObservableProperty]
     private AppStatus _status = AppStatus.Stopped;
 
     [ObservableProperty]
@@ -69,6 +81,10 @@ public sealed partial class ManagedAppViewModel : ViewModelBase
     /// </summary>
     public string LastExitCodeDisplay => 
         LastExitCode?.ToString() ?? "-";
+
+    public string ScheduledRestartDisplay => ScheduledRestartEnabled
+        ? $"Every {ScheduledRestartIntervalHours}h"
+        : "Off";
 
     /// <summary>
     /// Gets the status text for display.
@@ -146,6 +162,16 @@ public sealed partial class ManagedAppViewModel : ViewModelBase
         OnPropertyChanged(nameof(StatusText));
     }
 
+    partial void OnScheduledRestartEnabledChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ScheduledRestartDisplay));
+    }
+
+    partial void OnScheduledRestartIntervalHoursChanged(int value)
+    {
+        OnPropertyChanged(nameof(ScheduledRestartDisplay));
+    }
+
     /// <summary>
     /// Creates a view model from a configuration.
     /// </summary>
@@ -160,6 +186,10 @@ public sealed partial class ManagedAppViewModel : ViewModelBase
         IsPaused = config.IsPaused,
         UsePowerShellBypass = config.UsePowerShellBypass,
         RestartDelaySeconds = config.RestartDelaySeconds,
+        ScheduledRestartEnabled = config.ScheduledRestartEnabled,
+        ScheduledRestartIntervalHours = config.ScheduledRestartIntervalHours,
+        ScheduledRestartMethod = config.ScheduledRestartMethod,
+        GracefulShutdownCommand = config.GracefulShutdownCommand,
         Status = config.IsPaused ? AppStatus.Paused : AppStatus.Stopped,
         LastStartTime = config.LastStartTime,
         LastExitTime = config.LastExitTime,
@@ -180,6 +210,10 @@ public sealed partial class ManagedAppViewModel : ViewModelBase
         IsPaused = IsPaused,
         UsePowerShellBypass = UsePowerShellBypass,
         RestartDelaySeconds = RestartDelaySeconds,
+        ScheduledRestartEnabled = ScheduledRestartEnabled,
+        ScheduledRestartIntervalHours = ScheduledRestartIntervalHours,
+        ScheduledRestartMethod = ScheduledRestartMethod,
+        GracefulShutdownCommand = GracefulShutdownCommand,
         LastStartTime = LastStartTime,
         LastExitTime = LastExitTime,
         LastExitCode = LastExitCode

@@ -6,8 +6,8 @@
         xmlns:vm="clr-namespace:AlwaysRun.ViewModels"
         mc:Ignorable="d"
         Title="{Binding WindowTitle}" 
-        Height="420" Width="550"
-        MinHeight="420" MinWidth="450"
+        Height="570" Width="650"
+        MinHeight="570" MinWidth="550"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         ShowInTaskbar="False"
@@ -34,6 +34,10 @@
     
     <Grid Margin="15">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -100,9 +104,39 @@
                        Margin="8,0,0,0"
                        Foreground="Gray"/>
         </StackPanel>
+
+        <!-- Scheduled Restart -->
+        <CheckBox Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="2"
+                  Content="Restart this application on a schedule"
+                  IsChecked="{Binding ScheduledRestartEnabled}"
+                  Margin="0,8,0,5"
+                  ToolTip="Restarts periodically from the most recent successful start"/>
+
+        <Label Grid.Row="6" Content="Restart Every:"/>
+        <StackPanel Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="2"
+                    Orientation="Horizontal" Margin="0,5"
+                    IsEnabled="{Binding ScheduledRestartEnabled}">
+            <TextBox Width="60"
+                     Text="{Binding ScheduledRestartIntervalHours, UpdateSourceTrigger=PropertyChanged}"/>
+            <TextBlock Text="hours (use 24 for daily)" VerticalAlignment="Center" Margin="8,0,0,0"/>
+        </StackPanel>
+
+        <Label Grid.Row="7" Content="Stop Method:"/>
+        <ComboBox Grid.Row="7" Grid.Column="1" Grid.ColumnSpan="2"
+                  ItemsSource="{Binding ScheduledRestartMethods}"
+                  SelectedItem="{Binding ScheduledRestartMethod}"
+                  IsEnabled="{Binding ScheduledRestartEnabled}"
+                  Margin="0,5"/>
+
+        <Label Grid.Row="8" Content="Graceful Command:"/>
+        <TextBox Grid.Row="8" Grid.Column="1" Grid.ColumnSpan="2"
+                 Text="{Binding GracefulShutdownCommand, UpdateSourceTrigger=PropertyChanged}"
+                 IsEnabled="{Binding ScheduledRestartEnabled}"
+                 Margin="0,5"
+                 ToolTip="For GracefulCommand, this is run via cmd.exe. AlwaysRun waits up to 30 seconds, then force-kills if needed."/>
         
         <!-- PowerShell Bypass Option -->
-        <CheckBox Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="2"
+        <CheckBox Grid.Row="9" Grid.Column="1" Grid.ColumnSpan="2"
                   Content="Use -ExecutionPolicy Bypass for PowerShell scripts"
                   IsChecked="{Binding UsePowerShellBypass}"
                   Visibility="{Binding ShowPowerShellBypass, Converter={StaticResource BoolToVisConverter}}"
@@ -110,7 +144,7 @@
                   ToolTip="Allows running PowerShell scripts that may be blocked by execution policy"/>
         
         <!-- Validation Error -->
-        <Border Grid.Row="6" Grid.ColumnSpan="3"
+        <Border Grid.Row="10" Grid.ColumnSpan="3"
                 Background="#FFEEEE"
                 BorderBrush="#FFCCCC"
                 BorderThickness="1"
@@ -124,7 +158,7 @@
         </Border>
         
         <!-- Buttons -->
-        <StackPanel Grid.Row="8" Grid.ColumnSpan="3"
+        <StackPanel Grid.Row="12" Grid.ColumnSpan="3"
                     Orientation="Horizontal"
                     HorizontalAlignment="Right"
                     Margin="0,15,0,0">
