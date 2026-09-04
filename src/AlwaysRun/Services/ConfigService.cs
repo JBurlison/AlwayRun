@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using AlwaysRun.Infrastructure;
@@ -16,6 +17,9 @@ public sealed class ConfigService(ILogger<ConfigService> logger) : IConfigServic
     {
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+        AllowTrailingCommas = true,
+        ReadCommentHandling = JsonCommentHandling.Skip,
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };
 
@@ -38,8 +42,30 @@ public sealed class ConfigService(ILogger<ConfigService> logger) : IConfigServic
             }
 
             logger.LogDebug("Loading configuration from {FilePath}", filePath);
-            await using var stream = File.OpenRead(filePath);
-            var config = await JsonSerializer.DeserializeAsync<AppConfiguration>(stream, JsonOptions, ct);
+            var json = await File.ReadAllTextAsync(filePath, ct);
+            var repairedLegacyJson = false;
+            AppConfiguration? config;
+
+            try
+            {
+                config = JsonSerializer.Deserialize<AppConfiguration>(json, JsonOptions);
+            }
+            catch (JsonException firstException)
+            {
+                // Some early/hand-edited configuration files contain non-breaking
+                // spaces and unnecessary escapes such as \_ or \:. They are not
+                // strict JSON, but their intent is unambiguous, so repair and retry.
+                var repairedJson = RepairLegacyJson(json);
+                if (string.Equals(repairedJson, json, StringComparison.Ordinal))
+                {
+                    throw;
+                }
+
+                logger.LogWarning(firstException,
+                    "Configuration uses legacy non-standard JSON escaping; repairing it");
+                config = JsonSerializer.Deserialize<AppConfiguration>(repairedJson, JsonOptions);
+                repairedLegacyJson = true;
+            }
 
             if (config is null)
             {
@@ -48,7 +74,7 @@ public sealed class ConfigService(ILogger<ConfigService> logger) : IConfigServic
             }
 
             // Handle schema migration if needed
-            if (config.SchemaVersion < AppConfiguration.CurrentSchemaVersion)
+            if (config.SchemaVersion < AppConfiguration.CurrentSchemaVersion || repairedLegacyJson)
             {
                 logger.LogInformation("Migrating configuration from schema version {OldVersion} to {NewVersion}",
                     config.SchemaVersion, AppConfiguration.CurrentSchemaVersion);
@@ -107,7 +133,77 @@ public sealed class ConfigService(ILogger<ConfigService> logger) : IConfigServic
 
     private static AppConfiguration MigrateConfiguration(AppConfiguration config)
     {
-        // Future migrations can be added here
-        return config with { SchemaVersion = AppConfiguration.CurrentSchemaVersion };
+        var migratedApps = config.Apps.Select(app => app with
+        {
+            ScheduledRestartIntervalHours = app.ScheduledRestartIntervalHours <= 0
+                ? 24
+                : app.ScheduledRestartIntervalHours
+        }).ToList();
+
+        return config with
+        {
+            SchemaVersion = AppConfiguration.CurrentSchemaVersion,
+            Apps = migratedApps
+        };
+    }
+
+    /// <summary>
+    /// Repairs JSON produced or edited with legacy escaping rules. Only invalid
+    /// backslash escapes inside strings are changed; valid JSON escapes remain
+    /// byte-for-byte equivalent. Non-breaking spaces outside strings become spaces.
+    /// </summary>
+    private static string RepairLegacyJson(string json)
+    {
+        var repaired = new StringBuilder(json.Length);
+        var insideString = false;
+
+        for (var i = 0; i < json.Length; i++)
+        {
+            var current = json[i];
+
+            if (!insideString)
+            {
+                if (current == '\u00A0')
+                {
+                    repaired.Append(' ');
+                }
+                else
+                {
+                    repaired.Append(current);
+                    if (current == '"')
+                    {
+                        insideString = true;
+                    }
+                }
+                continue;
+            }
+
+            if (current == '"')
+            {
+                repaired.Append(current);
+                insideString = false;
+                continue;
+            }
+
+            if (current != '\\' || i + 1 >= json.Length)
+            {
+                repaired.Append(current);
+                continue;
+            }
+
+            var escaped = json[i + 1];
+            if (escaped is '"' or '\\' or '/' or 'b' or 'f' or 'n' or 'r' or 't' or 'u')
+            {
+                repaired.Append(current);
+                repaired.Append(escaped);
+                i++;
+                continue;
+            }
+
+            // Drop only the invalid escape marker. The following character is
+            // retained on the next iteration (for example, \_ becomes _).
+        }
+
+        return repaired.ToString();
     }
 }

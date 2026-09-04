@@ -125,7 +125,7 @@ public sealed partial class MainViewModel : ViewModelBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error initializing MainViewModel");
-            StatusMessage = "Error loading configuration";
+            StatusMessage = $"Initialization failed: {ex.Message}";
         }
         finally
         {
