@@ -79,7 +79,18 @@ public sealed class ConfigService(ILogger<ConfigService> logger) : IConfigServic
                 logger.LogInformation("Migrating configuration from schema version {OldVersion} to {NewVersion}",
                     config.SchemaVersion, AppConfiguration.CurrentSchemaVersion);
                 config = MigrateConfiguration(config);
-                await SaveInternalAsync(config, ct);
+                try
+                {
+                    await SaveInternalAsync(config, ct);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    // A migration write is desirable, but inability to replace an
+                    // older protected/locked file must not prevent monitoring.
+                    logger.LogWarning(ex,
+                        "Configuration was migrated in memory but could not be rewritten; continuing with {AppCount} apps",
+                        config.Apps.Count);
+                }
             }
 
             logger.LogInformation("Loaded configuration with {AppCount} managed applications", config.Apps.Count);
@@ -125,10 +136,60 @@ public sealed class ConfigService(ILogger<ConfigService> logger) : IConfigServic
             await JsonSerializer.SerializeAsync(stream, config, JsonOptions, ct);
         }
 
-        // Atomic move (overwrite)
-        File.Move(tempPath, filePath, overwrite: true);
+        try
+        {
+            CommitTemporaryFile(tempPath, filePath);
+        }
+        finally
+        {
+            // Do not leave a stale .tmp file after a failed replacement.
+            try
+            {
+                if (File.Exists(tempPath))
+                {
+                    File.Delete(tempPath);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogDebug(ex, "Could not remove temporary configuration file {TempPath}", tempPath);
+            }
+        }
 
         logger.LogInformation("Configuration saved successfully with {AppCount} managed applications", config.Apps.Count);
+    }
+
+    private void CommitTemporaryFile(string tempPath, string filePath)
+    {
+        if (!File.Exists(filePath))
+        {
+            File.Move(tempPath, filePath);
+            return;
+        }
+
+        try
+        {
+            // File.Replace is the preferred atomic operation for an existing file
+            // and works in cases where Move(overwrite) lacks delete permission.
+            File.Replace(tempPath, filePath, destinationBackupFileName: null, ignoreMetadataErrors: true);
+            return;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PlatformNotSupportedException)
+        {
+            logger.LogWarning(ex,
+                "Atomic configuration replacement failed; trying an in-place overwrite");
+        }
+
+        // Some copied configuration files retain a read-only attribute. Clearing
+        // only that attribute and overwriting in place avoids requiring delete ACLs.
+        var attributes = File.GetAttributes(filePath);
+        if ((attributes & FileAttributes.ReadOnly) != 0)
+        {
+            File.SetAttributes(filePath, attributes & ~FileAttributes.ReadOnly);
+        }
+
+        File.Copy(tempPath, filePath, overwrite: true);
+        File.Delete(tempPath);
     }
 
     private static AppConfiguration MigrateConfiguration(AppConfiguration config)
